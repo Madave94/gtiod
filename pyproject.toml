@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gitod"
+version = "1.0"
+authors = [
+  { name="David Tschirschwitz", email="david.tschirschwitz@uni-weimar.de" },
+]
+description = "Supporting code for the Paper Drawing the Same Bounding Box Twice?"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "tensorboard",
+    "tqdm",
+    "opencv-python",
+    "scipy",
+]
+[tool.setuptools.packages.find]
+include = ["gtiod*"]
+namespaces = false
