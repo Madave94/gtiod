@@ -24,7 +24,9 @@ as well as the training and validation dataset used here:
 
 ## Evaluation Server
 
-The evaluation server can be found on [eval-ai](https://eval.ai/web/challenges/challenge-page/2078/overview).
+Coming soon...
+
+Not yet available ~ (The evaluation server can be found on [eval-ai](https://eval.ai/web/challenges/challenge-page/2078/overview).)
 
 ## Installation
 
