@@ -1,14 +1,17 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import argparse
+import json
 import os
 import os.path as osp
 import time
 import warnings
+from copy import deepcopy
 
 import mmcv
 import torch
 from mmcv import Config, DictAction
 from mmcv.cnn import fuse_conv_bn
+from mmcv.image import tensor2imgs
 from mmcv.runner import (get_dist_info, init_dist, load_checkpoint,
                          wrap_fp16_model)
 
@@ -19,7 +22,8 @@ from mmdet.models import build_detector
 from mmdet.utils import (build_ddp, build_dp, compat_cfg, get_device,
                          replace_cfg_vals, setup_multi_processes,
                          update_data_root)
-from gtiod.utils import add_root_dir_to_dataset_config
+from mmdet.core import encode_mask_results
+from softlabels.utils import add_root_dir_to_dataset_config
 
 
 def parse_args():
@@ -105,6 +109,8 @@ def parse_args():
         choices=['none', 'pytorch', 'slurm', 'mpi'],
         default='none',
         help='job launcher')
+    parser.add_argument("--coco_json", type=str, help="add a path to store the output in coco json format. Can be used "
+                                                      "for submissions to the leaderboard")
     parser.add_argument('--local_rank', type=int, default=0)
     args = parser.parse_args()
     if 'LOCAL_RANK' not in os.environ:
@@ -242,8 +248,12 @@ def main():
 
     if not distributed:
         model = build_dp(model, cfg.device, device_ids=cfg.gpu_ids)
-        outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
-                                  args.show_score_thr)
+        if args.coco_json:
+            outputs, outputs_coco_json = single_gpu_test_coco_json(model, data_loader, args.show, args.show_dir,
+                                      args.show_score_thr)
+        else:
+            outputs = single_gpu_test(model, data_loader, args.show, args.show_dir,
+                                      args.show_score_thr)
     else:
         model = build_ddp(
             model,
@@ -256,6 +266,9 @@ def main():
 
     rank, _ = get_dist_info()
     if rank == 0:
+        if args.coco_json:
+            print(f'\nwriting coco results to {args.coco_json}')
+            mmcv.dump(outputs_coco_json, args.coco_json)
         if args.out:
             print(f'\nwriting results to {args.out}')
             mmcv.dump(outputs, args.out)
@@ -277,6 +290,88 @@ def main():
             if args.work_dir is not None and rank == 0:
                 mmcv.dump(metric_dict, json_file)
 
+def single_gpu_test_coco_json(model,
+                    data_loader,
+                    show=False,
+                    out_dir=None,
+                    show_score_thr=0.3):
+    """
+        Run this to create a coco json ready for the evalai leaderboard
+    """
+    model.eval()
+    results = []
+    results_coco_json = []
+    dataset = data_loader.dataset
+    PALETTE = getattr(dataset, 'PALETTE', None)
+    prog_bar = mmcv.ProgressBar(len(dataset))
+    for i, data in enumerate(data_loader):
+        with torch.no_grad():
+            result = model(return_loss=False, rescale=True, **data)
+
+        batch_size = len(result)
+
+        if show or out_dir:
+            if batch_size == 1 and isinstance(data['img'][0], torch.Tensor):
+                img_tensor = data['img'][0]
+            else:
+                img_tensor = data['img'][0].data[0]
+            img_metas = data['img_metas'][0].data[0]
+            imgs = tensor2imgs(img_tensor, **img_metas[0]['img_norm_cfg'])
+            assert len(imgs) == len(img_metas)
+
+            for i, (img, img_meta) in enumerate(zip(imgs, img_metas)):
+                h, w, _ = img_meta['img_shape']
+                img_show = img[:h, :w, :]
+
+                ori_h, ori_w = img_meta['ori_shape'][:-1]
+                img_show = mmcv.imresize(img_show, (ori_w, ori_h))
+
+                if out_dir:
+                    out_file = osp.join(out_dir, img_meta['ori_filename'])
+                else:
+                    out_file = None
+
+                model.module.show_result(
+                    img_show,
+                    result[i],
+                    bbox_color=PALETTE,
+                    text_color=PALETTE,
+                    mask_color=PALETTE,
+                    show=show,
+                    out_file=out_file,
+                    score_thr=show_score_thr)
+
+        # encode mask results
+        if isinstance(result[0], tuple):
+            result = [(bbox_results, encode_mask_results(mask_results)) for bbox_results, mask_results in result]
+        # This logic is only used in panoptic segmentation test.
+        elif isinstance(result[0], dict) and 'ins_results' in result[0]:
+            raise Exception("This logic for the panoptic segmentation test is missing for the coco results creation.")
+
+        if isinstance(result[0], tuple):
+            for image_index, result_entries in enumerate(result):
+                name = data['img_metas'][0].data[0][image_index]["ori_filename"]
+                bboxes_list, masks_list  = result_entries
+                for current_class_index, (bbox_entries, mask_entries) in enumerate(zip(bboxes_list, masks_list)):
+                    for bbox, mask in zip(bbox_entries, mask_entries):
+                        x1,y1,x2,y2,score = bbox
+                        decoded_mask = deepcopy(mask)
+                        decoded_mask["counts"] = mask["counts"].decode()
+                        results_coco_json.append(
+                            {
+                                "file_name": name,
+                                "category_id": int(current_class_index+1),
+                                "bbox": [float(x1),float(y1),float(x2-x1),float(y2-y1)],
+                                "score": float(score),
+                                "segmentation": decoded_mask
+                            }
+                        )
+
+        results.extend(result)
+
+        for _ in range(batch_size):
+            prog_bar.update()
+    return results, results_coco_json
 
 if __name__ == '__main__':
     main()
