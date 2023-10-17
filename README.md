@@ -1,7 +1,7 @@
 # Drawing the Same Bounding Box Twice? Coping Noisy Annotations in Object Detection with Repeated Labels
 
 This repository contains the code associated with the publication "Drawing the Same Bounding Box Twice? Coping Noisy 
-Annotations in Object Detection with Repeated Labels" published at GCPR23. It contains (1) the extended mmdetection code with the methods
+Annotations in Object Detection with Repeated Labels" published at GCPR23 [[PDF](https://arxiv.org/abs/2309.09742)]. It contains (1) the extended mmdetection code with the methods
 to aggregate ground truth approximations from noisy labels, (2) builders and pipeline elements to add necessary 
 functionalities to mmdetection, (3) updated datasets modules to allow using the different noisy label data and (4) all 
 configurations to reproduce the results presented in the paper. It is not possible to reproduce the aggregation done on 
@@ -24,9 +24,7 @@ as well as the training and validation dataset used here:
 
 ## Evaluation Server
 
-Coming soon...
-
-Not yet available ~ (The evaluation server can be found on [eval-ai](https://eval.ai/web/challenges/challenge-page/2078/overview).)
+The evaluation server can be found on [eval-ai](https://eval.ai/web/challenges/challenge-page/2078/overview).
 
 ## Installation
 
@@ -101,4 +99,10 @@ file, ready for leaderboard submission.
 
 ## Cite us
 
-Coming soon...
+    @inproceedings{tschirschwitz2023aggregation,
+      title={Drawing the Same Bounding Box Twice? Coping Noisy Annotations in Object Detection with Repeated Labels},
+      author={Tschirschwitz, David and Benz, Christian and Florek, Morris and Noerderhus, Henrik and Stein, Benno and Rodehorst, Volker},
+      booktitle={Pattern Recognition: 45th DAGM German Conference, DAGM GCPR 2023, Heidelberg, Germany, September 19--22, 2023, Proceedings},
+      year={2023},
+      organization={Springer}
+    }
